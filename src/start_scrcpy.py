@@ -1,19 +1,21 @@
+import ctypes
+import functools
 import logging
 import os
 import subprocess
 import time
 import warnings
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Iterable, Optional
 
 import cv2
+import numpy as np
 import pyautogui
-import pygetwindow
-from pygetwindow import PyGetWindowException
-from required_files import RequiredLatestGithubZipFile
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,47 +24,68 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+SCRCPY_TITLE = 'scrcpy'
+
+FindWindow = ctypes.windll.user32.FindWindowW
+PostMessage = ctypes.windll.user32.PostMessageW
+
+WM_PLUGIN_BASE = 0x0400  # WM_USER
+
+
+class PluginActions(Enum):
+    click = 1
+    key = 2
+    take_screenshot = 3
+
+
+@dataclass(frozen=True)
+class Point:
+    x: int
+    y: int
+
+
+@dataclass(frozen=True)
+class Box:
+    x: int
+    y: int
+    width: int
+    height: int
+
+    @property
+    def center(self):
+        return Point(
+            self.x + self.width // 2,
+            self.y + self.height // 2
+        )
+
 
 def _load_image(img):
-    return cv2.imread(str(resources / img), cv2.IMREAD_COLOR)
+    img = str(img.resolve())
 
+    return cv2.imread(img, cv2.IMREAD_GRAYSCALE)
 
-pyautogui.useImageNotFoundException()
 
 root_path = Path(__file__).parent / '..'
 resources = root_path / 'resources/buttons'
 scrcpy_exe = root_path / 'bin/scrcpy.exe'
 
-money_button = _load_image('money_button.png')
-claim_button = _load_image('claim_button.png')
-riot_images = {
-    'humans': [
-        _load_image('humans_won_riot_1.png'),
-        _load_image('humans_won_riot_2.png'),
-    ],
-    'zombies': [
-        _load_image('zombies_won_riot_1.png'),
-    ],
-}
-
-x2_money = _load_image('x2_money.png')
-x2_claim_button = _load_image('x2_claim_button.png')
-
-
-RequiredLatestGithubZipFile(
-    url='https://github.com/Genymobile/scrcpy/releases/latest/',
-    save_as=scrcpy_exe.parent,
-    file_to_check=scrcpy_exe.name,
-).check()
+money_button = [_load_image(img) for img in resources.glob('money_button/*.png')]
+claim_button = [_load_image(img) for img in resources.glob('claim_button/*.png')]
+x2_money = [_load_image(img) for img in resources.glob('x2_money/*.png')]
+riot_images = [_load_image(img) for img in resources.glob('riot/*.png')]
 
 
 def run_scrcpy_endlessly() -> None:
     os.chdir(scrcpy_exe.parent)
-    while True:
+    # max 3 restart in 1 minute
+
+    real_start = datetime.now()
+    restarts = 0
+    while restarts <= 3:
         subprocess.run([
             'scrcpy',
-            '--always-on-top',
-            '--disable-screensaver',
+            # '--always-on-top',
+            # '--disable-screensaver',
             '--lock-video-orientation=0',
             '--max-fps=2',
             '--max-size=1024',
@@ -70,123 +93,161 @@ def run_scrcpy_endlessly() -> None:
             '--no-downsize-on-error',
             '--no-power-on',
             '--stay-awake',
-            '--window-x=0',
-            '--window-y=0',
+            # '--window-x=0',
+            # '--window-y=0',
             '--window-width=350',
+            f'--window-title={SCRCPY_TITLE}',
             '--turn-screen-off',
-            '--window-title=scrcpy',
         ])
+        last_stop_of_program = datetime.now()
+
+        if (last_stop_of_program - real_start).seconds > 60:
+            real_start = datetime.now()
+            restarts = 0
+        else:
+            restarts += 1
 
 
 @lru_cache(maxsize=1)
-def _find_scrcpy_window() -> Optional[pygetwindow.Window]:
-    possible = [
-        w
-        for w in pyautogui.getWindowsWithTitle(title='scrcpy')
-        if (
-           w.title == 'scrcpy'
-           and 350 <= w.width <= 450
-           and 700 <= w.height <= 1100
-        )
-    ]
-
-    if len(possible) != 1:
-        warnings.warn(f'**DEV WARNING**, I got {len(possible)} windows... Should only have 1.')
+def _find_scrcpy_window() -> Optional[int]:  # HWND
+    hwnd = FindWindow("SDL_app", SCRCPY_TITLE)
+    if not hwnd:
+        warnings.warn(f"**DEV WARNING**, I couldn't find the SDL application!")
         return None
 
-    return possible[0]
+    is_minimized = ctypes.windll.user32.IsIconic(hwnd) != 0
+    if not is_minimized:
+        SW_MINIMIZE = 6
+        ctypes.windll.user32.ShowWindow(hwnd, SW_MINIMIZE)
+
+    return hwnd
 
 
-def get_scrcpy_window() -> pygetwindow.Window:
+def get_scrcpy_window() -> int:
     times_tried = 0
     while times_tried <= 5:
         if times_tried > 0:
             _find_scrcpy_window.cache_clear()
             time.sleep(1)
 
-        try:
-            win = _find_scrcpy_window()
-            if not win.visible:
-                win.activate()
+        win = _find_scrcpy_window()
+        if win is not None:
             return win
-        except (PyGetWindowException, AttributeError, TypeError):
-            times_tried += 1
+
+        times_tried += 1
 
     raise ValueError("No window present...")
 
 
-@lru_cache(maxsize=1)
-def _screen_size() -> Tuple[int, int]:
-    ss = pyautogui.screenshot()
-    return ss.width, ss.height
-
-
-def _get_scrcpy_rect() -> Tuple[int, int, int, int]:
-    win = get_scrcpy_window()
-
-    w, h = _screen_size()
-
-    return (
-        max(0, min(win.left, w)),
-        max(0, min(win.top, h)),
-        max(0, min(win.width, w)),
-        max(0, min(win.height, h)),
-    )
-
-
-def _check_if_riot_happened():
-    ...
+def makelong(loword, hiword):
+    return ((int(hiword) & 0xFFFF) * 0x10000) | (int(loword) & 0xFFFF)
 
 
 def _click(loc):
-    if not isinstance(loc, pyautogui.Point):
-        loc = pyautogui.center(loc)
+    if not isinstance(loc, Point):
+        loc = loc.center
 
     logging.info(f' * clicking on {loc}')
-    one_pix_diff = pyautogui.Point(loc.x + 1, loc.y - 1)
-    pyautogui.moveTo(loc)
-    time.sleep(0.25)
-    pyautogui.moveTo(one_pix_diff)
-    time.sleep(0.25)
-    pyautogui.click(loc)
+    PostMessage(get_scrcpy_window(), WM_PLUGIN_BASE, PluginActions.click.value, makelong(loc.x, loc.y))
+
     time.sleep(0.5)
 
 
 def _handle_riot_screen():
     logging.info('[riot] Checking riot screen')
-    location = None
-
-    def _continue():
-        nonlocal location
-
-        for section, imgs in riot_images.items():
-            for img in imgs:
-                location = _get_button_location(img, confidence=0.85)
-                if location:
-                    return section
-
-        return False
-
-    while who_won := _continue() is not False:
-        logger.info(f"[riot] {who_won} won")
+    while (location := _get_button_location(riot_images, confidence=0.85)) is not None:
         time.sleep(1)
 
         logger.info("[riot] clicking it away")
-        center = pyautogui.center(location)
-        above_center = pyautogui.Point(center.x, center.y - 300)
+        center = location.center
+        above_center = Point(center.x, center.y - 300)
         _click(above_center)
 
 
-def _get_button_location(button, confidence=0.999):
+class ImageNotFound(Exception):
+    """Raised when the image is not found (duh!)"""
+
+
+def _locate_on_screen(haystack, needle, limit=1, confidence=0.90, step=1) -> Box:
+    needle_height, needle_width = needle.shape[:2]
+
+    if step == 2:
+        confidence *= 0.95
+        needle = needle[::step, ::step]
+        haystack = haystack[::step, ::step]
+    else:
+        step = 1
+
+    result = cv2.matchTemplate(haystack, needle, cv2.TM_CCOEFF_NORMED)
+
+    match_indices = np.arange(result.size)[(result > confidence).flatten()]
+    matches = np.unravel_index(match_indices[:limit], result.shape)
+
+    if len(matches[0]) == 0:
+        raise ImageNotFound
+
+    matchx = matches[1] * step
+    matchy = matches[0] * step
+    for x, y in zip(matchx, matchy):
+        return Box(x, y, needle_width, needle_height)
+
+    raise ImageNotFound
+
+
+def run_only_once_every(seconds=0, microseconds=750_000):
+    max_diff = timedelta(seconds=seconds, microseconds=microseconds)
+
+    def _inner(func):
+        last_ret = None
+        last_ret_time: Optional[datetime] = None
+
+        @functools.wraps(func)
+        def _wrapped(*args, **kwargs):
+            nonlocal last_ret_time, last_ret
+
+            if last_ret_time is not None and (datetime.now() - last_ret_time) < max_diff:
+                return last_ret
+
+            ret = func(*args, **kwargs)
+            last_ret_time = datetime.now()
+            last_ret = ret
+
+            return ret
+
+        return _wrapped
+
+    return _inner
+
+
+@run_only_once_every()
+def _grab_scrcpy():
+    hwnd = get_scrcpy_window()
+    screenshot_location = scrcpy_exe.parent / 'screenshot.bmp'
+    screenshot_location.unlink(missing_ok=True)
+    PostMessage(hwnd, WM_PLUGIN_BASE, PluginActions.take_screenshot.value, 0)
+    while not screenshot_location.exists():
+        time.sleep(0.1)
+
+    return _load_image(screenshot_location)
+
+
+def _get_button_location(buttons, confidence=0.90) -> Optional[Box]:
+    if not isinstance(buttons, Iterable):
+        buttons = [buttons]
+
     # locate button on the screen
-    try:
-        return pyautogui.locateOnScreen(
-            button,
-            region=_get_scrcpy_rect(),
-            confidence=confidence,
-        )
-    except pyautogui.ImageNotFoundException:
-        return None
+    screen_copy = _grab_scrcpy()
+    for button in buttons:
+        try:
+            return _locate_on_screen(
+                screen_copy,
+                button,
+                confidence=confidence,
+            )
+        except ImageNotFound:
+            continue
+
+    return None
 
 
 def _click_on_button(button, wait_before_click: float = 0, wait_for_disappearance: bool = True):
@@ -244,7 +305,7 @@ def click_on_buttons():
             last_x2_money_check = datetime.now()
 
         # It's not immediately that this money thing comes again. No need to waste resources...
-        time.sleep(40)
+        time.sleep(50)
 
         # TODO: riot lost
         # TODO: x2 money nearly gone (check every 10 minutes or so)
@@ -255,12 +316,11 @@ def increase_multiplier():
     x2_button = _click_on_button(x2_money, wait_for_disappearance=False)
 
     logging.info('[x2 money] claim button')
-    _click_on_button(x2_claim_button, wait_for_disappearance=False)
-    _click_on_button(x2_claim_button, wait_for_disappearance=False)
+    _click_on_button(claim_button, wait_for_disappearance=False)
 
     time.sleep(1)
 
-    while _get_button_location(x2_claim_button) is not None:
+    while _get_button_location(claim_button) is not None:
         logging.info('[x2 money] get out')
         _click(x2_button)
         time.sleep(1)
