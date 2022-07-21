@@ -300,15 +300,14 @@ def click_on_buttons():
         _click_on_button(claim_button, wait_before_click=0.5)
         logging.info('[money] finished')
 
+        did_x2_money_check = False
         if last_x2_money_check is None or (datetime.now() - last_x2_money_check).seconds > 600:
             increase_multiplier()
             last_x2_money_check = datetime.now()
+            did_x2_money_check = True
 
         # It's not immediately that this money thing comes again. No need to waste resources...
-        time.sleep(50)
-
-        # TODO: riot lost
-        # TODO: x2 money nearly gone (check every 10 minutes or so)
+        time.sleep(50 if did_x2_money_check else 55)
 
 
 def increase_multiplier():
