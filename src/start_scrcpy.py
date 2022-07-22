@@ -15,7 +15,6 @@ from typing import Iterable, Optional
 
 import cv2
 import numpy as np
-import pyautogui
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,10 +58,10 @@ class Box:
         )
 
 
-def _load_image(img):
+def _load_image(img, gray=True):
     img = str(img.resolve())
 
-    return cv2.imread(img, cv2.IMREAD_GRAYSCALE)
+    return cv2.imread(img, cv2.IMREAD_GRAYSCALE if gray else cv2.IMREAD_COLOR)
 
 
 root_path = Path(__file__).parent / '..'
@@ -220,7 +219,7 @@ def run_only_once_every(seconds=0, microseconds=750_000):
 
 
 @run_only_once_every()
-def _grab_scrcpy():
+def _grab_scrcpy(gray=True):
     hwnd = get_scrcpy_window()
     screenshot_location = scrcpy_exe.parent / 'screenshot.bmp'
     screenshot_location.unlink(missing_ok=True)
@@ -228,7 +227,7 @@ def _grab_scrcpy():
     while not screenshot_location.exists():
         time.sleep(0.1)
 
-    return _load_image(screenshot_location)
+    return _load_image(screenshot_location, gray)
 
 
 def _get_button_location(buttons, confidence=0.90) -> Optional[Box]:
@@ -257,7 +256,7 @@ def _click_on_button(button, wait_before_click: float = 0, wait_for_disappearanc
         _handle_riot_screen()
 
         if (datetime.now() - enter_into_method).seconds > 600:
-            pyautogui.screenshot('failure.png')
+            cv2.imwrite(f'failure_{datetime.now():%Y%m%d_%H%M%S}.png', _grab_scrcpy(False))
             logging.error("Couldn't find a button in 10 minutes?")
             raise ValueError("Couldn't find a button in 10 minutes?")
 
