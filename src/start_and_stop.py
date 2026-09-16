@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
+
 from src.common import (
     click_on_button,
     continue_images,
@@ -36,12 +37,18 @@ def _click_on_buttons():
 
         device.start_app(app_name)
         double_img = click_on_button(
-            double_images, wait_for_disappearance=False, waiting_time=20, check_riot_screen=False
+            double_images,
+            wait_for_disappearance=False,
+            waiting_time=20,
+            check_riot_screen=False,
         )
         _save_screen_to("start_stop")
 
         continue_img = click_on_button(
-            continue_images, wait_for_disappearance=True, waiting_time=20, check_riot_screen=False
+            continue_images,
+            wait_for_disappearance=True,
+            waiting_time=20,
+            check_riot_screen=False,
         )
 
         if not double_img:
