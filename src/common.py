@@ -5,12 +5,12 @@ import os
 import subprocess
 import time
 import warnings
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 import cv2
 import numpy as np
@@ -20,11 +20,11 @@ from ppadb.device import Device
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] [%(levelname)s] %(message)s",
-    datefmt='%Y-%m-%d %H:%M:%S',
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
-SCRCPY_TITLE = 'scrcpy'
+SCRCPY_TITLE = "scrcpy"
 
 FindWindow = ctypes.windll.user32.FindWindowW
 PostMessage = ctypes.windll.user32.PostMessageW
@@ -53,10 +53,7 @@ class Box:
 
     @property
     def center(self):
-        return Point(
-            self.x + self.width // 2,
-            self.y + self.height // 2
-        )
+        return Point(self.x + self.width // 2, self.y + self.height // 2)
 
 
 def _load_image(img, gray=True):
@@ -65,22 +62,22 @@ def _load_image(img, gray=True):
     return cv2.imread(img, cv2.IMREAD_GRAYSCALE if gray else cv2.IMREAD_COLOR)
 
 
-root_path = Path(__file__).parent / '..'
-resources = root_path / 'resources/buttons'
-scrcpy_exe = root_path / 'bin/scrcpy.exe'
+root_path = Path(__file__).parent / ".."
+resources = root_path / "resources/buttons"
+scrcpy_exe = root_path / "bin/scrcpy.exe"
 
-money_button = [_load_image(img) for img in resources.glob('money_button/*.png')]
-claim_button = [_load_image(img) for img in resources.glob('claim_button/*.png')]
-x2_money = [_load_image(img) for img in resources.glob('x2_money/*.png')]
-riot_images = [_load_image(img) for img in resources.glob('riot/*.png')]
-double_images = [_load_image(img) for img in resources.glob('double/*.png')]
-continue_images = [_load_image(img) for img in resources.glob('continue/*.png')]
+money_button = [_load_image(img) for img in resources.glob("money_button/*.png")]
+claim_button = [_load_image(img) for img in resources.glob("claim_button/*.png")]
+x2_money = [_load_image(img) for img in resources.glob("x2_money/*.png")]
+riot_images = [_load_image(img) for img in resources.glob("riot/*.png")]
+double_images = [_load_image(img) for img in resources.glob("double/*.png")]
+continue_images = [_load_image(img) for img in resources.glob("continue/*.png")]
 
 
 class ADBDevice:
     _client: Client = None
     _device: Device = None
-    _devices: List[Device] = None
+    _devices: list[Device] = None
 
     @property
     def client(self):
@@ -101,18 +98,16 @@ class ADBDevice:
         if self._client:
             return
 
-        self._client = Client(
-            host="127.0.0.1", port=5037
-        )
+        self._client = Client(host="127.0.0.1", port=5037)
 
         try:
             self._devices = self._client.devices()
         except RuntimeError as ex:
-            if 'Is adb running on your computer' not in str(ex):
+            if "Is adb running on your computer" not in str(ex):
                 raise
 
             # Try to start adb service
-            subprocess.run(['adb', 'start-server'], capture_output=True)
+            subprocess.run(["adb", "start-server"], capture_output=True)
 
         # And get the devices again.
         self._devices = self._client.devices()
@@ -123,11 +118,11 @@ class ADBDevice:
         time.sleep(10)
 
     def stop_app(self, app_name: str) -> None:
-        self.device.shell(f'am force-stop {app_name}')
+        self.device.shell(f"am force-stop {app_name}")
         time.sleep(1)
 
 
-def run_scrcpy_endlessly(run_x_times: int = None) -> None:
+def run_scrcpy_endlessly(run_x_times: int | None = None) -> None:
     os.chdir(scrcpy_exe.parent)
     # max 3 restart in 1 minute
 
@@ -135,23 +130,25 @@ def run_scrcpy_endlessly(run_x_times: int = None) -> None:
     restarts = 0
     counter = 0
     while restarts <= 3:
-        subprocess.run([
-            'scrcpy',
-            # '--always-on-top',
-            # '--disable-screensaver',
-            '--lock-video-orientation=0',
-            '--max-fps=2',
-            '--max-size=1024',
-            '--no-clipboard-autosync',
-            '--no-downsize-on-error',
-            '--no-power-on',
-            '--stay-awake',
-            # '--window-x=0',
-            # '--window-y=0',
-            '--window-width=350',
-            f'--window-title={SCRCPY_TITLE}',
-            '--turn-screen-off',
-        ])
+        subprocess.run(
+            [
+                "scrcpy",
+                # '--always-on-top',
+                # '--disable-screensaver',
+                "--lock-video-orientation=0",
+                "--max-fps=2",
+                "--max-size=1024",
+                "--no-clipboard-autosync",
+                "--no-downsize-on-error",
+                "--no-power-on",
+                "--stay-awake",
+                # '--window-x=0',
+                # '--window-y=0',
+                "--window-width=350",
+                f"--window-title={SCRCPY_TITLE}",
+                "--turn-screen-off",
+            ]
+        )
         last_stop_of_program = datetime.now()
 
         counter += 1
@@ -166,10 +163,10 @@ def run_scrcpy_endlessly(run_x_times: int = None) -> None:
 
 
 @lru_cache(maxsize=1)
-def _find_scrcpy_window() -> Optional[int]:  # HWND
+def _find_scrcpy_window() -> int | None:  # HWND
     hwnd = FindWindow("SDL_app", SCRCPY_TITLE)
     if not hwnd:
-        warnings.warn(f"**DEV WARNING**, I couldn't find the SDL application!")
+        warnings.warn("**DEV WARNING**, I couldn't find the SDL application!")
         return None
 
     is_minimized = ctypes.windll.user32.IsIconic(hwnd) != 0
@@ -204,14 +201,14 @@ def _click(loc):
     if not isinstance(loc, Point):
         loc = loc.center
 
-    logging.info(f' * clicking on {loc}')
+    logging.info(f" * clicking on {loc}")
     PostMessage(get_scrcpy_window(), WM_PLUGIN_BASE, PluginActions.click.value, makelong(loc.x, loc.y))
 
     time.sleep(0.5)
 
 
 def _handle_riot_screen():
-    logging.info('[riot] Checking riot screen')
+    logging.info("[riot] Checking riot screen")
     while (location := _get_button_location(riot_images, confidence=0.85)) is not None:
         time.sleep(1)
 
@@ -256,7 +253,7 @@ def run_only_once_every(seconds=0, microseconds=750_000):
 
     def _inner(func):
         last_ret = None
-        last_ret_time: Optional[datetime] = None
+        last_ret_time: datetime | None = None
 
         @functools.wraps(func)
         def _wrapped(*args, **kwargs):
@@ -278,7 +275,7 @@ def run_only_once_every(seconds=0, microseconds=750_000):
 
 def real_grab_scrcpy(gray=True):
     hwnd = get_scrcpy_window()
-    screenshot_location = scrcpy_exe.parent / 'screenshot.bmp'
+    screenshot_location = scrcpy_exe.parent / "screenshot.bmp"
     screenshot_location.unlink(missing_ok=True)
     PostMessage(hwnd, WM_PLUGIN_BASE, PluginActions.take_screenshot.value, 0)
     while not screenshot_location.exists():
@@ -300,7 +297,7 @@ def grab_scrcpy(gray=True):
     return real_grab_scrcpy(gray=gray)
 
 
-def _get_button_location(buttons, confidence=0.90) -> Optional[Box]:
+def _get_button_location(buttons, confidence=0.90) -> Box | None:
     if not isinstance(buttons, Iterable):
         buttons = [buttons]
 
@@ -319,18 +316,24 @@ def _get_button_location(buttons, confidence=0.90) -> Optional[Box]:
     return None
 
 
-def click_on_button(button, wait_before_click: float = 0, wait_for_disappearance: bool = True, waiting_time=None, check_riot_screen: bool = True):
+def click_on_button(
+    button,
+    wait_before_click: float = 0,
+    wait_for_disappearance: bool = True,
+    waiting_time=None,
+    check_riot_screen: bool = True,
+):
     found_button = None
-    wait_until = datetime.now() + timedelta(seconds=5*60 if waiting_time is None else waiting_time)
+    wait_until = datetime.now() + timedelta(seconds=5 * 60 if waiting_time is None else waiting_time)
     while datetime.now() < wait_until:
         if check_riot_screen:
             _handle_riot_screen()
 
         # locate button on the screen
-        logger.debug(' -- trying to find the button')
+        logger.debug(" -- trying to find the button")
         location = _get_button_location(button)
         if location is None:
-            logger.debug(f' -- not found (found_button: {found_button})')
+            logger.debug(f" -- not found (found_button: {found_button})")
             if found_button is not None:
                 # We found the button, and now we don't find it anymore... Good -> Stop the loop.
                 return found_button
@@ -341,11 +344,11 @@ def click_on_button(button, wait_before_click: float = 0, wait_for_disappearance
         if wait_before_click:
             time.sleep(wait_before_click)
 
-        logger.debug(f' -- clicking {location}')
+        logger.debug(f" -- clicking {location}")
         _click(location)
 
         if not wait_for_disappearance:
-            logger.debug(f' -- done')
+            logger.debug(" -- done")
             return location
 
         found_button = location
@@ -355,22 +358,22 @@ def click_on_button(button, wait_before_click: float = 0, wait_for_disappearance
     if waiting_time is not None:  # We wanted to wait a certain time...
         return None
 
-    cv2.imwrite(f'failure_{datetime.now():%Y%m%d_%H%M%S}.png', grab_scrcpy(False))
+    cv2.imwrite(f"failure_{datetime.now():%Y%m%d_%H%M%S}.png", grab_scrcpy(False))
     logging.error("Couldn't find a button in 10 minutes?")
     raise ValueError("Couldn't find a button in 10 minutes?")
 
 
 def click_on_buttons():
-    last_x2_money_check: Optional[datetime] = None
+    last_x2_money_check: datetime | None = None
 
     while True:
         _handle_riot_screen()
 
-        logging.info('[money] checking for money button')
+        logging.info("[money] checking for money button")
         click_on_button(money_button)
-        logging.info('[money] checking for claim button')
+        logging.info("[money] checking for claim button")
         click_on_button(claim_button, wait_before_click=0.5)
-        logging.info('[money] finished')
+        logging.info("[money] finished")
 
         did_x2_money_check = False
         if last_x2_money_check is None or (datetime.now() - last_x2_money_check).seconds > 600:
@@ -383,22 +386,22 @@ def click_on_buttons():
 
 
 def increase_multiplier():
-    logging.info('[x2 money] first click')
+    logging.info("[x2 money] first click")
     x2_button = click_on_button(x2_money, wait_for_disappearance=False, waiting_time=10)
     if x2_button is None:  # Very likely we're in the wasteland event.
         return
 
-    logging.info('[x2 money] claim button')
+    logging.info("[x2 money] claim button")
     click_on_button(claim_button, wait_for_disappearance=False)
 
     time.sleep(1)
 
     while _get_button_location(claim_button) is not None:
-        logging.info('[x2 money] get out')
+        logging.info("[x2 money] get out")
         _click(x2_button)
         time.sleep(1)
 
-    logging.info('[x2 money] finished')
+    logging.info("[x2 money] finished")
 
 
 device = ADBDevice()

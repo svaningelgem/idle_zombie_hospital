@@ -20,15 +20,12 @@ PostMessage = ctypes.windll.user32.PostMessageA
 MapVirtualKey = ctypes.windll.user32.MapVirtualKeyA
 
 
-win = next(
-    w
-    for w in pyautogui.getWindowsWithTitle('scrcpy')
-    if w.title == 'scrcpy'
-)
+win = next(w for w in pyautogui.getWindowsWithTitle("scrcpy") if w.title == "scrcpy")
 
 
-screenshot = Path(r'E:\idle_zombie_hospital\bin\screenshot.bmp')
+screenshot = Path(r"E:\idle_zombie_hospital\bin\screenshot.bmp")
 screenshot.unlink(missing_ok=True)
+
 
 # https://www.autoitscript.com/forum/topic/20925-send-keys-to-minimized-window/page/2/#comments
 def makelong(loword, hiword):
@@ -54,9 +51,9 @@ KMOD_SHIFT = KMOD_LSHIFT | KMOD_RSHIFT
 
 # PostMessage(hwnd, WM_PLUGIN_BASE, click, makelong(302, 175))
 # PostMessage(hwnd, WM_PLUGIN_BASE, click, makelong(290, 500))
-PostMessage(hwnd, WM_PLUGIN_BASE, key, makelong(SDL_SCANCODE_S, KMOD_LSHIFT|KMOD_LALT))
+PostMessage(hwnd, WM_PLUGIN_BASE, key, makelong(SDL_SCANCODE_S, KMOD_LSHIFT | KMOD_LALT))
 # PostMessage(hwnd, WM_PLUGIN_BASE, take_screenshot, 0)
 
 
 time.sleep(2)
-print('screenshot is: ', 'THERE !!!' if screenshot.exists() else ' -- ')
+print("screenshot is: ", "THERE !!!" if screenshot.exists() else " -- ")
