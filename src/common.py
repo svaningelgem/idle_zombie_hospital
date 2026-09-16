@@ -202,7 +202,12 @@ def _click(loc):
         loc = loc.center
 
     logging.info(f" * clicking on {loc}")
-    PostMessage(get_scrcpy_window(), WM_PLUGIN_BASE, PluginActions.click.value, makelong(loc.x, loc.y))
+    PostMessage(
+        get_scrcpy_window(),
+        WM_PLUGIN_BASE,
+        PluginActions.click.value,
+        makelong(loc.x, loc.y),
+    )
 
     time.sleep(0.5)
 
@@ -259,7 +264,10 @@ def run_only_once_every(seconds=0, microseconds=750_000):
         def _wrapped(*args, **kwargs):
             nonlocal last_ret_time, last_ret
 
-            if last_ret_time is not None and (datetime.now() - last_ret_time) < max_diff:
+            if (
+                last_ret_time is not None
+                and (datetime.now() - last_ret_time) < max_diff
+            ):
                 return last_ret
 
             ret = func(*args, **kwargs)
@@ -324,7 +332,9 @@ def click_on_button(
     check_riot_screen: bool = True,
 ):
     found_button = None
-    wait_until = datetime.now() + timedelta(seconds=5 * 60 if waiting_time is None else waiting_time)
+    wait_until = datetime.now() + timedelta(
+        seconds=5 * 60 if waiting_time is None else waiting_time
+    )
     while datetime.now() < wait_until:
         if check_riot_screen:
             _handle_riot_screen()
@@ -376,7 +386,10 @@ def click_on_buttons():
         logging.info("[money] finished")
 
         did_x2_money_check = False
-        if last_x2_money_check is None or (datetime.now() - last_x2_money_check).seconds > 600:
+        if (
+            last_x2_money_check is None
+            or (datetime.now() - last_x2_money_check).seconds > 600
+        ):
             increase_multiplier()
             last_x2_money_check = datetime.now()
             did_x2_money_check = True

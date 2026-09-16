@@ -51,7 +51,9 @@ KMOD_SHIFT = KMOD_LSHIFT | KMOD_RSHIFT
 
 # PostMessage(hwnd, WM_PLUGIN_BASE, click, makelong(302, 175))
 # PostMessage(hwnd, WM_PLUGIN_BASE, click, makelong(290, 500))
-PostMessage(hwnd, WM_PLUGIN_BASE, key, makelong(SDL_SCANCODE_S, KMOD_LSHIFT | KMOD_LALT))
+PostMessage(
+    hwnd, WM_PLUGIN_BASE, key, makelong(SDL_SCANCODE_S, KMOD_LSHIFT | KMOD_LALT)
+)
 # PostMessage(hwnd, WM_PLUGIN_BASE, take_screenshot, 0)
 
 
